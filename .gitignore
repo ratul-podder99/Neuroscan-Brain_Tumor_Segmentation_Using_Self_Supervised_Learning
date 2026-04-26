@@ -4,3 +4,4 @@ __pycache__/
 run.bat
 run.sh
 run.txt
+.DS_Store
