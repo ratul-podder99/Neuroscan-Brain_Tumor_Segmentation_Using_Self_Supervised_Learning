@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NeuroScan · Brain Tumour Segmentation</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060a10;--surface:#0d1520;--card:#111c2a;--border:rgba(0,200,200,.12);
+  --glow:rgba(0,200,200,.18);--cyan:#00c8c8;--cyan-dim:rgba(0,200,200,.15);
+  --red:#e63946;--amber:#f4a261;--green:#06d6a0;--muted:#4a6080;
+  --text:#c8ddf0;--heading:#e8f4ff;
+  --mono:'Space Mono',monospace;--sans:'DM Sans',sans-serif;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.6;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:-1;
+  background-image:linear-gradient(rgba(0,200,200,.03) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,200,200,.03) 1px,transparent 1px);
+  background-size:40px 40px}
+header{display:flex;align-items:center;justify-content:space-between;padding:20px 48px;
+  border-bottom:1px solid var(--border);backdrop-filter:blur(10px);
+  position:sticky;top:0;z-index:100;background:rgba(6,10,16,.85)}
+.logo{font-family:var(--mono);font-size:18px;letter-spacing:.12em;color:var(--cyan);display:flex;align-items:center;gap:10px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan);animation:pulse-dot 2s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+.badge{font-family:var(--mono);font-size:10px;letter-spacing:.1em;border:1px solid var(--border);padding:4px 10px;border-radius:20px;color:var(--muted)}
+.hero{text-align:center;padding:64px 24px 40px}
+.hero h1{font-family:var(--mono);font-size:clamp(26px,5vw,48px);color:var(--heading);letter-spacing:-.02em;line-height:1.15}
+.hero h1 span{color:var(--cyan)}
+.hero p{margin-top:14px;max-width:540px;margin-left:auto;margin-right:auto;color:var(--muted);font-size:14px;font-weight:300}
+.main{max-width:1140px;margin:0 auto;padding:0 24px 80px}
+.upload-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:32px;margin-bottom:28px}
+.section-title{font-family:var(--mono);font-size:11px;letter-spacing:.15em;color:var(--cyan);text-transform:uppercase;margin-bottom:20px}
+.tabs{display:flex;gap:0;margin-bottom:24px;border-radius:8px;overflow:hidden;border:1px solid var(--border);width:fit-content}
+.tab{padding:8px 20px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;cursor:pointer;transition:all .2s;background:transparent;color:var(--muted);border:none}
+.tab.active{background:var(--cyan-dim);color:var(--cyan)}
+.upload-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.upload-grid.single{grid-template-columns:1fr;max-width:280px}
+.drop-zone{border:1.5px dashed var(--border);border-radius:10px;padding:22px 10px;text-align:center;cursor:pointer;transition:all .25s;position:relative;overflow:hidden;min-height:110px}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--cyan);background:var(--cyan-dim)}
+.drop-zone.invalid{border-color:var(--red)!important;background:rgba(230,57,70,.08)!important}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--cyan);text-transform:uppercase;margin-bottom:4px}
+.drop-hint{font-size:11px;color:var(--muted)}
+.drop-preview{width:100%;height:70px;object-fit:cover;border-radius:6px;margin-top:8px;display:none}
+.file-name{font-size:10px;color:var(--cyan);margin-top:6px;word-break:break-all;display:none;padding:0 4px}
+.slice-panel{background:rgba(0,200,200,.06);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:16px;display:none}
+.slice-panel.visible{display:block}
+.slice-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.slice-label{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.slice-slider{flex:1;min-width:120px;accent-color:var(--cyan);cursor:pointer}
+.slice-val{font-family:var(--mono);font-size:13px;color:var(--cyan);min-width:36px;text-align:right}
+.slice-hint{font-size:11px;color:var(--muted);margin-top:6px}
+.btn-analyse{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;
+  background:linear-gradient(135deg,var(--cyan) 0%,#006e6e 100%);color:#060a10;
+  font-family:var(--mono);font-size:13px;letter-spacing:.12em;font-weight:700;border:none;
+  border-radius:10px;cursor:pointer;transition:transform .15s,box-shadow .15s;
+  box-shadow:0 0 20px rgba(0,200,200,.25);margin-top:16px}
+.btn-analyse:hover{transform:translateY(-2px);box-shadow:0 0 32px rgba(0,200,200,.45)}
+.btn-analyse:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.spinner{width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#060a10;border-radius:50%;animation:spin .7s linear infinite;display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+#results{display:none}
+.top-bar{display:flex;gap:12px;align-items:stretch;margin-bottom:18px;flex-wrap:wrap}
+.summary-bar{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 22px;flex:1}
+.summary-label{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em}
+.summary-value{font-family:var(--mono);font-size:22px;color:var(--heading)}
+.summary-value span{color:var(--cyan)}
+.summary-sub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px}
+.summary-sub span{color:var(--amber)}
+.top-bar-right{display:flex;flex-direction:column;gap:8px}
+.btn-pdf,.btn-3d-launch{display:flex;align-items:center;gap:8px;padding:10px 18px;
+  background:transparent;border:1px solid var(--border);color:var(--cyan);
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;border-radius:8px;
+  cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-pdf:hover,.btn-3d-launch:hover{background:var(--cyan-dim);border-color:var(--cyan)}
+.btn-3d-launch{color:var(--green);border-color:rgba(6,214,160,.25)}
+.btn-3d-launch:hover{background:rgba(6,214,160,.1);border-color:var(--green)}
+.btn-3d-launch:disabled{opacity:.4;cursor:not-allowed}
+.slice-badge{font-family:var(--mono);font-size:11px;color:var(--muted);background:rgba(0,200,200,.08);border:1px solid var(--border);border-radius:6px;padding:4px 10px;display:none;margin-top:8px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.results-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+@media(max-width:768px){.results-grid{grid-template-columns:1fr}.upload-grid{grid-template-columns:repeat(2,1fr)}.top-bar{flex-direction:column}}
+.result-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:box-shadow .2s}
+.result-card:hover{box-shadow:0 0 20px var(--glow)}
+.result-label{padding:10px 14px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.result-label::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+.result-card img{width:100%;display:block;image-rendering:pixelated}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+@media(max-width:640px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent-color,var(--cyan))}
+.stat-name{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.stat-pct{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--accent-color,var(--cyan))}
+.stat-vol{font-family:var(--mono);font-size:12px;color:var(--accent-color,var(--cyan));opacity:.75;margin-top:2px}
+.stat-vol-label{font-size:9px;color:var(--muted);font-family:var(--mono)}
+.stat-conf{font-size:11px;color:var(--muted);margin-top:4px}
+.progress-bar-wrap{background:rgba(255,255,255,.05);border-radius:4px;height:4px;margin-top:8px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:4px;background:var(--accent-color,var(--cyan));transition:width 1s cubic-bezier(.34,1.56,.64,1)}
+.heatmaps-row{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.heatmaps-title{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:14px}
+.heatmaps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.heatmap-item{text-align:center}
+.heatmap-item img{width:100%;border-radius:8px;image-rendering:pixelated}
+.heatmap-label{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-top:6px}
+/* 3D */
+.card-3d{background:var(--card);border:1px solid rgba(6,214,160,.2);border-radius:16px;padding:28px;margin-bottom:20px}
+.canvas-wrap{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:#080e18}
+#canvas-3d{width:100%;height:420px;display:block;cursor:grab}
+#canvas-3d:active{cursor:grabbing}
+.canvas-hint{position:absolute;bottom:10px;left:12px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.08em;pointer-events:none}
+.vol-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:8px;position:relative;overflow:hidden}
+.vol-card-name{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+.vol-card-val{font-family:var(--mono);font-size:20px;font-weight:700}
+.vol-card-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.vol-bar{height:3px;background:rgba(255,255,255,.05);border-radius:2px;margin-top:8px;overflow:hidden}
+.vol-bar-fill{height:100%;border-radius:2px;transition:width 1.2s cubic-bezier(.34,1.56,.64,1)}
+.vol-total{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:4px}
+.scan-meta{font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.9;margin-top:14px}
+/* ── Clinical Suggestions ──────────────────────────────────────────────────── */
+/* ── Clinical Suggestions ──────────────────────────────────────────────────── */
+.clinical-card{background:var(--card);border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.06);margin-bottom:20px}
+.clinical-hero{padding:28px 28px 20px;border-bottom:1px solid var(--border)}
+.grade-badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;letter-spacing:.08em;padding:8px 18px;border-radius:24px;border:1px solid;font-weight:700;margin-bottom:16px}
+.grade-dot{width:10px;height:10px;border-radius:50%;background:currentColor}
+.clinical-headline{font-size:22px;font-weight:600;color:var(--heading);line-height:1.3;margin-bottom:10px}
+.clinical-subline{font-size:14px;color:var(--muted);line-height:1.6}
+.clinical-sections{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-top:1px solid var(--border)}
+@media(max-width:900px){.clinical-sections{grid-template-columns:1fr}}
+.clinical-col{padding:24px 28px;border-right:1px solid var(--border)}
+.clinical-col:last-child{border-right:none}
+@media(max-width:900px){.clinical-col{border-right:none;border-bottom:1px solid var(--border)}}
+.col-title{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:18px}
+/* Condition indicators */
+.indicator{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.04)}
+.indicator:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.indicator-bar{width:3px;flex-shrink:0;border-radius:2px;min-height:36px;margin-top:2px}
+.indicator-label{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+.indicator-value{font-size:16px;font-weight:600;color:var(--heading)}
+.indicator-note{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+/* Treatment steps */
+.treat-step{display:flex;gap:14px;margin-bottom:16px;align-items:flex-start}
+.treat-step:last-child{margin-bottom:0}
+.step-circle{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--step-color,var(--cyan));color:var(--step-color,var(--cyan));font-family:var(--mono);font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.step-body{}
+.step-title{font-size:14px;font-weight:500;color:var(--heading);margin-bottom:4px;line-height:1.3}
+.step-desc{font-size:12px;color:var(--muted);line-height:1.5}
+/* Molecular tests */
+.mol-pill{background:var(--surface);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid var(--cyan)}
+.mol-pill:last-child{margin-bottom:0}
+.mol-name{font-family:var(--mono);font-size:11px;color:var(--cyan);margin-bottom:3px}
+.mol-desc{font-size:12px;color:var(--muted);line-height:1.4}
+/* Follow-up */
+.fu-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:13px;color:var(--text)}
+.fu-item:last-child{border-bottom:none}
+.fu-dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);flex-shrink:0}
+/* Disclaimer */
+.clinical-disclaimer{margin:0;padding:14px 28px;background:rgba(230,57,70,.05);border-top:1px solid rgba(230,57,70,.15);font-size:11px;color:rgba(230,57,70,.7);font-family:var(--mono);line-height:1.6}
+
+/* Banners */
+.demo-banner{background:rgba(244,162,97,.08);border:1px solid rgba(244,162,97,.25);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--amber);margin-bottom:16px;display:none;font-family:var(--mono)}
+.error-banner{background:rgba(230,57,70,.08);border:1px solid rgba(230,57,70,.3);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--red);margin-bottom:16px;display:none}
+.spinner-sm{width:14px;height:14px;border:2px solid rgba(6,214,160,.2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;display:none}
+footer{text-align:center;padding:24px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);font-family:var(--mono);letter-spacing:.08em}
+footer strong{color:var(--text)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><div class="logo-dot"></div>NEUROSCAN</div>
+  <div class="badge">BraTS2020 · U-Net · 4-Class</div>
+</header>
+<div class="hero">
+  <h1>Brain Tumour<br/><span>Segmentation</span></h1>
+  <p>Upload BraTS MRI files (.nii) for AI-powered tumour segmentation, 3D reconstruction, volumetric analysis and clinical pathway guidance.</p>
+</div>
+<main class="main">
+
+  <div class="upload-card">
+    <div class="section-title">// Input Configuration</div>
+    <div class="tabs">
+      <button class="tab active" onclick="setMode('nii')">NIfTI Files (.nii)</button>
+      <button class="tab"        onclick="setMode('multi')">4 PNG/JPG</button>
+      <button class="tab"        onclick="setMode('single')">Single Image</button>
+    </div>
+
+    <div id="mode-nii">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Upload the 4 <code style="color:var(--cyan)">.nii</code> files from one patient folder — e.g. <code style="color:var(--cyan)">BraTS20_Training_001/</code></p>
+      <div class="upload-grid">
+        <div class="drop-zone" id="dz-nii-t1" ondrop="handleDrop(event,'nii_t1')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-nii-t1" accept="*" onchange="onNiiFile('file-nii-t1','fn-t1','dz-nii-t1')" />
+          <div class="drop-label">T1</div><div class="drop-hint">_t1.nii</div>
+          <div class="file-name" id="fn-t1"></div>
+        </div>
+        <div class="drop-zone" id="dz-nii-t1ce" ondrop="handleDrop(event,'nii_t1ce')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-nii-t1ce" accept="*" onchange="onNiiFile('file-nii-t1ce','fn-t1ce','dz-nii-t1ce')" />
+          <div class="drop-label">T1ce</div><div class="drop-hint">_t1ce.nii</div>
+          <div class="file-name" id="fn-t1ce"></div>
+        </div>
+        <div class="drop-zone" id="dz-nii-t2" ondrop="handleDrop(event,'nii_t2')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-nii-t2" accept="*" onchange="onNiiFile('file-nii-t2','fn-t2','dz-nii-t2')" />
+          <div class="drop-label">T2</div><div class="drop-hint">_t2.nii</div>
+          <div class="file-name" id="fn-t2"></div>
+        </div>
+        <div class="drop-zone" id="dz-nii-flair" ondrop="handleDrop(event,'nii_flair')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-nii-flair" accept="*" onchange="onNiiFile('file-nii-flair','fn-flair','dz-nii-flair')" />
+          <div class="drop-label">FLAIR</div><div class="drop-hint">_flair.nii</div>
+          <div class="file-name" id="fn-flair"></div>
+        </div>
+      </div>
+      <div class="slice-panel" id="slice-panel">
+        <div class="slice-row">
+          <span class="slice-label">SLICE INDEX</span>
+          <input type="range" class="slice-slider" id="slice-slider" min="0" max="154" value="75"
+            oninput="document.getElementById('slice-val').textContent=this.value" />
+          <span class="slice-val" id="slice-val">75</span>
+        </div>
+        <div class="slice-hint">Best tumour slice auto-selected. Drag to explore other slices.</div>
+      </div>
+    </div>
+
+    <div id="mode-multi" style="display:none">
+      <div class="upload-grid">
+        <div class="drop-zone" id="dz-t1" ondrop="handleDrop(event,'t1')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-t1" accept="image/*" onchange="previewFile('file-t1','prev-t1','dz-t1')" />
+          <div class="drop-label">T1</div><div class="drop-hint">PNG / JPG</div>
+          <img class="drop-preview" id="prev-t1" />
+        </div>
+        <div class="drop-zone" id="dz-t1ce" ondrop="handleDrop(event,'t1ce')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-t1ce" accept="image/*" onchange="previewFile('file-t1ce','prev-t1ce','dz-t1ce')" />
+          <div class="drop-label">T1ce</div><div class="drop-hint">PNG / JPG</div>
+          <img class="drop-preview" id="prev-t1ce" />
+        </div>
+        <div class="drop-zone" id="dz-t2" ondrop="handleDrop(event,'t2')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-t2" accept="image/*" onchange="previewFile('file-t2','prev-t2','dz-t2')" />
+          <div class="drop-label">T2</div><div class="drop-hint">PNG / JPG</div>
+          <img class="drop-preview" id="prev-t2" />
+        </div>
+        <div class="drop-zone" id="dz-flair" ondrop="handleDrop(event,'flair')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-flair" accept="image/*" onchange="previewFile('file-flair','prev-flair','dz-flair')" />
+          <div class="drop-label">FLAIR</div><div class="drop-hint">PNG / JPG</div>
+          <img class="drop-preview" id="prev-flair" />
+        </div>
+      </div>
+    </div>
+
+    <div id="mode-single" style="display:none">
+      <div class="upload-grid single">
+        <div class="drop-zone" id="dz-single" ondrop="handleDrop(event,'single')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <input type="file" id="file-single" accept="image/*" onchange="previewFile('file-single','prev-single','dz-single')" />
+          <div class="drop-label">MRI Scan</div>
+          <div class="drop-hint">Axial brain MRI slice</div>
+          <img class="drop-preview" id="prev-single" />
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:8px">Must be a grayscale brain MRI slice. Non-brain images will be rejected.</p>
+    </div>
+
+    <button class="btn-analyse" id="btn-analyse" onclick="runPrediction()">
+      <div class="spinner" id="spinner"></div>
+      <span id="btn-text">ANALYSE SCAN</span>
+    </button>
+  </div>
+
+  <div id="results">
+    <div class="demo-banner" id="demo-banner">⚠ DEMO MODE — no model file found. Showing synthetic segmentation.</div>
+    <div class="error-banner" id="error-banner"></div>
+
+    <div class="top-bar">
+      <div class="summary-bar">
+        <div class="summary-label">// TOTAL TUMOUR COVERAGE</div>
+        <div class="summary-value"><span id="tumour-pct">—</span>% of scan</div>
+        <div class="summary-sub">Single-slice volume estimate: <span id="tumour-vol">—</span> cm³</div>
+        <div class="slice-badge" id="slice-badge"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="top-bar-right">
+        <button class="btn-pdf" onclick="exportPDF()">
+          <span style="font-size:10px;border:1px solid currentColor;padding:1px 4px;border-radius:2px">PDF</span>
+          Download Report
+        </button>
+        <button class="btn-3d-launch" id="btn-3d-launch" onclick="runReconstruct3D()" disabled>
+          <div class="spinner-sm" id="spinner-3d"></div>
+          <span id="btn-3d-text">Generate 3D Model</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="results-grid">
+      <div class="result-card"><div class="result-label">Original Input (T1ce)</div><img id="img-original" /></div>
+      <div class="result-card"><div class="result-label">Segmentation Mask</div><img id="img-seg" /></div>
+      <div class="result-card"><div class="result-label">Overlay</div><img id="img-overlay" /></div>
+    </div>
+
+    <div class="stats-row" id="stats-row"></div>
+
+    <div class="heatmaps-row">
+      <div class="heatmaps-title">// Per-Class Probability Heatmaps</div>
+      <div class="heatmaps-grid" id="heatmaps-grid"></div>
+    </div>
+
+    <!-- Clinical Suggestions -->
+    <div id="section-clinical" style="display:none">
+      <div class="clinical-card">
+        <div class="clinical-header" id="clinical-header"></div>
+        <div class="clinical-summary" id="clinical-summary"></div>
+        <div class="clinical-body">
+          <div>
+            <div class="clinical-section-title">Quantitative Findings</div>
+            <div id="clinical-findings"></div>
+            <div style="margin-top:24px">
+              <div class="clinical-section-title">Follow-up Imaging Schedule</div>
+              <div id="clinical-followup"></div>
+            </div>
+          </div>
+          <div>
+            <div class="clinical-section-title">Typical Treatment Pathway</div>
+            <div id="clinical-pathway"></div>
+          </div>
+        </div>
+        <div style="padding:0 28px 24px">
+          <div class="clinical-section-title">Recommended Molecular Tests</div>
+          <div id="clinical-molecular"></div>
+        </div>
+        <div class="disclaimer-box" id="clinical-disclaimer"></div>
+        <div class="sources-section" id="clinical-sources"></div>
+      </div>
+    </div>
+
+    <!-- 3D Reconstruction -->
+    <div id="section-3d" style="display:none">
+      <div class="card-3d">
+        <div class="section-title" style="margin-bottom:20px;color:var(--green)">// 3D Tumour Reconstruction</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start">
+          <div>
+            <div class="canvas-wrap">
+              <canvas id="canvas-3d"></canvas>
+              <div class="canvas-hint">DRAG TO ROTATE · AUTO-ROTATING</div>
+            </div>
+          </div>
+          <div>
+            <div class="section-title" style="margin-bottom:14px;color:var(--green)">// Tumour Volume</div>
+            <div id="volume-table"></div>
+            <div class="scan-meta" id="scan-meta-3d"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<footer><strong>NeuroScan</strong> · U-Net Brain Tumour Segmentation · BraTS 2020 · Research Use Only</footer>
+
+<script>
+let currentMode    = 'nii';
+let lastResult     = null;
+let storedNiiFiles = null;
+let threeRenderer  = null;
+let threeAnimId    = null;
+
+function setMode(m) {
+  currentMode = m;
+  ['nii','multi','single'].forEach(id =>
+    document.getElementById('mode-'+id).style.display = id===m ? '' : 'none');
+  document.querySelectorAll('.tab').forEach((t,i) =>
+    t.classList.toggle('active', ['nii','multi','single'][i]===m));
+  updateStored3DButton();
+}
+
+function updateStored3DButton() {
+  document.getElementById('btn-3d-launch').disabled =
+    !(currentMode==='nii' && storedNiiFiles);
+}
+
+function onNiiFile(inputId, fnId, dzId) {
+  const file = document.getElementById(inputId).files[0]; if (!file) return;
+  document.getElementById(fnId).textContent = file.name;
+  document.getElementById(fnId).style.display = 'block';
+  document.getElementById(dzId).style.borderColor = 'var(--cyan)';
+  document.getElementById(dzId).classList.remove('invalid');
+  if (inputId === 'file-nii-t1') {
+    const fd = new FormData(); fd.append('t1', file);
+    fetch('/nii_info',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
+      if (d.error) { document.getElementById(dzId).classList.add('invalid'); showError(d.error); return; }
+      const slider = document.getElementById('slice-slider');
+      slider.max = d.depth-1; slider.value = d.best_slice;
+      document.getElementById('slice-val').textContent = d.best_slice;
+      document.getElementById('slice-panel').classList.add('visible');
+    }).catch(()=>{});
+  }
+  const all = ['nii-t1','nii-t1ce','nii-t2','nii-flair'].map(m=>document.getElementById('file-'+m).files[0]);
+  if (all.every(Boolean)) {
+    storedNiiFiles={t1:all[0],t1ce:all[1],t2:all[2],flair:all[3]};
+    updateStored3DButton();
+  }
+}
+
+function previewFile(inputId, previewId, dzId) {
+  const file = document.getElementById(inputId).files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const p = document.getElementById(previewId);
+    p.src = e.target.result; p.style.display = 'block';
+    document.getElementById(dzId).style.borderColor = 'var(--cyan)';
+    document.getElementById(dzId).classList.remove('invalid');
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function handleDragLeave(e) { e.currentTarget.classList.remove('dragover'); }
+function handleDrop(e, label) {
+  e.preventDefault(); e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  const inputMap={nii_t1:'file-nii-t1',nii_t1ce:'file-nii-t1ce',nii_t2:'file-nii-t2',nii_flair:'file-nii-flair',
+    t1:'file-t1',t1ce:'file-t1ce',t2:'file-t2',flair:'file-flair',single:'file-single'};
+  const fnMap={nii_t1:'fn-t1',nii_t1ce:'fn-t1ce',nii_t2:'fn-t2',nii_flair:'fn-flair'};
+  const prevMap={t1:'prev-t1',t1ce:'prev-t1ce',t2:'prev-t2',flair:'prev-flair',single:'prev-single'};
+  const dt=new DataTransfer(); dt.items.add(file);
+  document.getElementById(inputMap[label]).files=dt.files;
+  if (fnMap[label]) onNiiFile(inputMap[label],fnMap[label],e.currentTarget.id);
+  else if (prevMap[label]) previewFile(inputMap[label],prevMap[label],e.currentTarget.id);
+}
+
+function showError(msg) {
+  const eb=document.getElementById('error-banner');
+  eb.textContent='❌ '+msg; eb.style.display='block';
+  document.getElementById('results').style.display='block';
+}
+
+async function runPrediction() {
+  const btn=document.getElementById('btn-analyse');
+  const spinner=document.getElementById('spinner');
+  const btnText=document.getElementById('btn-text');
+
+  if (currentMode==='nii') {
+    const missing=['nii-t1','nii-t1ce','nii-t2','nii-flair']
+      .filter(m=>!document.getElementById('file-'+m).files[0]);
+    if (missing.length){alert('Please upload all 4 NIfTI files:\n'+missing.map(m=>m.replace('nii-','').toUpperCase()+'.nii').join('\n'));return;}
+  } else if (currentMode==='multi') {
+    const missing=['t1','t1ce','t2','flair'].filter(m=>!document.getElementById('file-'+m).files[0]);
+    if (missing.length){alert('Please upload: '+missing.join(', ').toUpperCase());return;}
+  } else {
+    if (!document.getElementById('file-single').files[0]){alert('Please upload an image.');return;}
+  }
+
+  btn.disabled=true; spinner.style.display='block'; btnText.textContent='ANALYSING…';
+  document.getElementById('results').style.display='none';
+  document.getElementById('error-banner').style.display='none';
+  document.getElementById('section-3d').style.display='none';
+  document.getElementById('section-clinical').style.display='none';
+
+  const fd=new FormData();
+  if (currentMode==='nii') {
+    fd.append('nii_t1',    document.getElementById('file-nii-t1').files[0]);
+    fd.append('nii_t1ce',  document.getElementById('file-nii-t1ce').files[0]);
+    fd.append('nii_t2',    document.getElementById('file-nii-t2').files[0]);
+    fd.append('nii_flair', document.getElementById('file-nii-flair').files[0]);
+    fd.append('slice_idx', document.getElementById('slice-slider').value);
+  } else if (currentMode==='multi') {
+    ['t1','t1ce','t2','flair'].forEach(m=>fd.append(m,document.getElementById('file-'+m).files[0]));
+  } else {
+    fd.append('image',document.getElementById('file-single').files[0]);
+  }
+
+  try {
+    const resp=await fetch('/predict',{method:'POST',body:fd});
+    const data=await resp.json();
+    if (data.error) throw new Error(data.error);
+    lastResult=data;
+    renderResults(data);
+    document.getElementById('results').style.display='block';
+    document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+  } catch(err) {
+    showError(err.message);
+  } finally {
+    btn.disabled=false; spinner.style.display='none'; btnText.textContent='ANALYSE SCAN';
+  }
+}
+
+function renderResults(data) {
+  document.getElementById('demo-banner').style.display = data.demo_mode ? 'block' : 'none';
+  document.getElementById('img-original').src = 'data:image/png;base64,'+data.original;
+  document.getElementById('img-seg').src       = 'data:image/png;base64,'+data.segmentation;
+  document.getElementById('img-overlay').src   = 'data:image/png;base64,'+data.overlay;
+  document.getElementById('tumour-pct').textContent = data.tumour_percentage.toFixed(1);
+  document.getElementById('tumour-vol').textContent = data.total_vol_cm3.toFixed(3);
+
+  const sb=document.getElementById('slice-badge');
+  if (data.slice_used!=null){sb.textContent='SLICE '+data.slice_used+' / '+(data.total_slices-1);sb.style.display='inline-block';}
+  else sb.style.display='none';
+
+  const legendColors={1:'#e63946',2:'#f4a261',3:'#06d6a0'};
+  document.getElementById('legend').innerHTML=[1,2,3].map(c=>
+    `<div class="legend-item"><div class="legend-dot" style="background:${legendColors[c]}"></div>${data.class_stats[c].name}</div>`
+  ).join('');
+
+  const accentMap={0:'#1e3a5f',1:'#e63946',2:'#f4a261',3:'#06d6a0'};
+  document.getElementById('stats-row').innerHTML=Object.entries(data.class_stats).map(([c,s])=>
+    `<div class="stat-card" style="--accent-color:${accentMap[c]}">
+       <div class="stat-name">${s.name}</div>
+       <div class="stat-pct">${s.percentage.toFixed(1)}%</div>
+       <div class="stat-vol">${s.vol_cm3.toFixed(3)} cm³</div>
+       <div class="stat-vol-label">single-slice est.</div>
+       <div class="stat-conf">Confidence: ${s.confidence.toFixed(1)}%</div>
+       <div class="progress-bar-wrap">
+         <div class="progress-bar-fill" style="width:${Math.min(s.percentage*3,100)}%"></div>
+       </div>
+     </div>`).join('');
+
+  const hmLabels=['Necrotic Core','Peritumoral Edema','Enhancing Tumour'];
+  document.getElementById('heatmaps-grid').innerHTML=data.conf_maps.map((b64,i)=>
+    `<div class="heatmap-item"><img src="data:image/png;base64,${b64}"/>
+     <div class="heatmap-label">${hmLabels[i]}</div></div>`).join('');
+
+  if (data.suggestions) renderClinical(data.suggestions);
+  document.getElementById('btn-3d-launch').disabled=!(currentMode==='nii' && storedNiiFiles);
+}
+
+// ── Clinical suggestions renderer ─────────────────────────────────────────────
+function renderClinical(s) {
+  document.getElementById('section-clinical').style.display = 'block';
+
+  const gradeColors = {'IV':'#e63946','III':'#f4a261','II':'#06d6a0','uncertain':'#4a6080'};
+  const gc = gradeColors[s.grade] || '#4a6080';
+
+  // ── Condition label mapping ───────────────────────────────────────────────
+  const conditionText = {
+    'IV':   'High-Grade Glioma Detected',
+    'III':  'Intermediate-Grade Glioma Detected',
+    'II':   'Low-Grade Glioma Pattern Detected',
+    'uncertain': 'Indeterminate Tumour Profile'
+  }[s.grade] || 'Tumour Detected';
+
+  const conditionDesc = {
+    'IV':   'The tumour shows significant active growth with a large necrotic (dead tissue) core. This is a fast-growing pattern that typically requires prompt treatment.',
+    'III':  'The tumour shows moderate activity. This pattern is between low and high grade — it requires tissue sampling to confirm the exact type before treatment planning.',
+    'II':   'The tumour shows low activity with minimal contrast enhancement. This pattern often grows slowly, but a tissue biopsy is still necessary to confirm classification.',
+    'uncertain': 'The imaging measurements did not match a clear pattern. Clinical correlation and biopsy are required before any treatment planning.'
+  }[s.grade] || s.summary;
+
+  // Severity indicator bar widths based on measurements
+  const f = s.findings || [];
+  const getValue = label => {
+    const found = f.find(x => x.label.toLowerCase().includes(label));
+    return found ? found.value : '—';
+  };
+
+  // ── Build HTML ────────────────────────────────────────────────────────────
+  let html = `<div class="clinical-card">`;
+
+  // Hero
+  html += `<div class="clinical-hero">
+    <div class="grade-badge" style="color:${gc};border-color:${gc};background:${gc}18">
+      <div class="grade-dot"></div>${conditionText}
+    </div>
+    <div class="clinical-headline">${s.grade_label}</div>
+    <div class="clinical-subline">${conditionDesc}</div>
+  </div>`;
+
+  // Three columns
+  html += `<div class="clinical-sections">`;
+
+  // Column 1 — Current Condition
+  html += `<div class="clinical-col">
+    <div class="col-title">Current Condition</div>`;
+
+  const indicators = [
+    {label:'Enhancing Tumour', val:getValue('enhancing'), note:'Active tumour tissue', color:'#06d6a0'},
+    {label:'Necrotic Core',    val:getValue('necrotic'),  note:'Dead tissue inside tumour', color:'#e63946'},
+    {label:'Peritumoral Oedema', val:getValue('oedema') || getValue('edema'), note:'Swelling around tumour', color:'#f4a261'},
+    {label:'Total Volume',     val:getValue('total'),     note:'Estimated tumour size', color:'#00c8c8'},
+    {label:'Model Confidence', val:getValue('confidence'), note:'AI prediction certainty', color:'#4a6080'},
+  ];
+
+  indicators.forEach(ind => {
+    html += `<div class="indicator">
+      <div class="indicator-bar" style="background:${ind.color}"></div>
+      <div>
+        <div class="indicator-label">${ind.label}</div>
+        <div class="indicator-value">${ind.val}</div>
+        <div class="indicator-note">${ind.note}</div>
+      </div>
+    </div>`;
+  });
+
+  html += `</div>`;
+
+  // Column 2 — Recommended Steps
+  const stepColors = {'IV':'#e63946','III':'#f4a261','II':'#06d6a0','uncertain':'#4a6080'};
+  const sc = stepColors[s.grade] || '#00c8c8';
+
+  html += `<div class="clinical-col">
+    <div class="col-title">Possible Treatment Steps</div>`;
+
+  if (s.pathway && s.pathway.length > 0) {
+    s.pathway.forEach(p => {
+      html += `<div class="treat-step">
+        <div class="step-circle" style="--step-color:${sc}">${p.step}</div>
+        <div class="step-body">
+          <div class="step-title">${p.action}</div>
+          <div class="step-desc">${p.rationale}</div>
+        </div>
+      </div>`;
+    });
+  } else {
+    html += `<div style="font-size:13px;color:var(--muted)">No specific pathway identified. Clinical assessment required.</div>`;
+  }
+
+  html += `</div>`;
+
+  // Column 3 — Tests + Follow-up
+  html += `<div class="clinical-col">
+    <div class="col-title">Required Lab Tests</div>`;
+
+  if (s.molecular && s.molecular.length > 0) {
+    s.molecular.forEach(m => {
+      html += `<div class="mol-pill">
+        <div class="mol-name">${m.test}</div>
+        <div class="mol-desc">${m.why}</div>
+      </div>`;
+    });
+  }
+
+  if (s.followup && s.followup.length > 0) {
+    html += `<div class="col-title" style="margin-top:24px">Follow-up Schedule</div>`;
+    s.followup.forEach(f => {
+      html += `<div class="fu-item"><div class="fu-dot"></div>${f}</div>`;
+    });
+  }
+
+  html += `</div></div>`;
+
+  // Disclaimer — compact single line
+  html += `<div class="clinical-disclaimer">
+    ⚠ This is an AI-assisted research tool based on published oncology guidelines. 
+    It is NOT a clinical diagnosis. All treatment decisions must be made by a qualified neurooncologist.
+  </div>`;
+
+  html += `</div>`;
+
+  document.getElementById('section-clinical').innerHTML = html;
+}
+
+// ── 3D Reconstruction ─────────────────────────────────────────────────────────
+async function runReconstruct3D() {
+  if (!storedNiiFiles){alert('NIfTI files are required for 3D reconstruction.');return;}
+  if (typeof THREE==='undefined'){alert('Three.js failed to load. Check your internet connection.');return;}
+  const btn=document.getElementById('btn-3d-launch');
+  const sp=document.getElementById('spinner-3d');
+  const bt=document.getElementById('btn-3d-text');
+  btn.disabled=true; sp.style.display='block'; bt.textContent='Processing…';
+  const fd=new FormData();
+  fd.append('nii_t1',storedNiiFiles.t1);fd.append('nii_t1ce',storedNiiFiles.t1ce);
+  fd.append('nii_t2',storedNiiFiles.t2);fd.append('nii_flair',storedNiiFiles.flair);
+  try {
+    const resp=await fetch('/reconstruct3d',{method:'POST',body:fd});
+    const data=await resp.json();
+    if (data.error) throw new Error(data.error);
+    document.getElementById('section-3d').style.display='block';
+    document.getElementById('section-3d').scrollIntoView({behavior:'smooth',block:'start'});
+    renderVolumeTable(data); init3DScene(data);
+  } catch(err){alert('3D reconstruction failed: '+err.message);}
+  finally{btn.disabled=false;sp.style.display='none';bt.textContent='Generate 3D Model';}
+}
+
+function renderVolumeTable(data) {
+  const names={'1':'Necrotic Core','2':'Peritumoral Edema','3':'Enhancing Tumour'};
+  const colors={'1':'#e63946','2':'#f4a261','3':'#06d6a0'};
+  const total=parseFloat(data.volumes_cm3.total);
+  let html='';
+  for (const c of ['1','2','3']) {
+    const vol=parseFloat(data.volumes_cm3[c]);
+    const pct=total>0?(vol/total*100).toFixed(1):'0.0';
+    html+=`<div class="vol-card" style="--accent:${colors[c]}">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${colors[c]};border-radius:3px 0 0 3px"></div>
+      <div class="vol-card-name">${names[c]}</div>
+      <div class="vol-card-val" style="color:${colors[c]}">${vol.toFixed(3)} cm³</div>
+      <div class="vol-card-sub">${pct}% of total tumour</div>
+      <div class="vol-bar"><div class="vol-bar-fill" style="width:${pct}%;background:${colors[c]}"></div></div>
+    </div>`;
+  }
+  html+=`<div class="vol-total">
+    <div class="vol-card-name" style="color:var(--muted)">Total Tumour Volume</div>
+    <div class="vol-card-val" style="color:var(--cyan);font-size:22px">${total.toFixed(3)} cm³</div>
+    <div class="vol-card-sub">Accurate multi-slice measurement</div>
+  </div>`;
+  document.getElementById('volume-table').innerHTML=html;
+  document.getElementById('scan-meta-3d').innerHTML=
+    `Slices analysed: ${data.slices_processed} (every 3rd, range 30–120)<br>
+     Voxel: ${data.voxel_mm.x}×${data.voxel_mm.y}×${data.voxel_mm.z} mm<br>
+     ${data.demo_mode?'⚠ Demo mode — synthetic data':'✓ Real model inference'}`;
+}
+
+function init3DScene(data) {
+  if (threeAnimId){cancelAnimationFrame(threeAnimId);threeAnimId=null;}
+  if (threeRenderer){threeRenderer.dispose();threeRenderer=null;}
+  const wrap=document.getElementById('canvas-3d').parentElement;
+  const canvas=document.getElementById('canvas-3d');
+  const W=wrap.offsetWidth,H=420;
+  canvas.width=W;canvas.height=H;
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x080e18);
+  const grid=new THREE.GridHelper(120,24,0x0d2040,0x0d2040);
+  grid.position.y=-38; scene.add(grid);
+  const camera=new THREE.PerspectiveCamera(50,W/H,0.1,2000);
+  camera.position.set(0,15,140); camera.lookAt(0,0,0);
+  threeRenderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  threeRenderer.setSize(W,H);
+  threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  const group=new THREE.Group();
+  const {x:bx,y:by,z:bz}=data.bounds;
+  const cx=bx/2,cy=by/2,cz=bz/2;
+  const sx=2.2,sy=2.2,sz=3.6;
+  const cfg={'1':{color:0xe63946,size:1.5,opacity:0.92},'2':{color:0xf4a261,size:0.95,opacity:0.50},'3':{color:0x06d6a0,size:1.7,opacity:0.95}};
+  for (const [cls,pts] of Object.entries(data.points)) {
+    if (!pts.x||pts.x.length===0) continue;
+    const n=pts.x.length;
+    const pos=new Float32Array(n*3);
+    for (let i=0;i<n;i++){pos[i*3]=(pts.x[i]-cx)*sx;pos[i*3+1]=(pts.y[i]-cy)*sy;pos[i*3+2]=(pts.z[i]-cz)*sz;}
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    const {color,size,opacity}=cfg[cls];
+    const mat=new THREE.PointsMaterial({color,size,transparent:true,opacity,sizeAttenuation:true});
+    group.add(new THREE.Points(geo,mat));
+  }
+  scene.add(group);
+  let dragging=false,autoRotate=true;
+  let prev={x:0,y:0}; let autoTimer=null;
+  const resumeAuto=()=>{autoTimer=setTimeout(()=>autoRotate=true,3000);};
+  canvas.addEventListener('mousedown',e=>{dragging=true;autoRotate=false;clearTimeout(autoTimer);prev={x:e.clientX,y:e.clientY};});
+  window.addEventListener('mouseup',()=>{dragging=false;resumeAuto();});
+  canvas.addEventListener('mousemove',e=>{if(!dragging)return;group.rotation.y+=(e.clientX-prev.x)*0.007;group.rotation.x+=(e.clientY-prev.y)*0.007;prev={x:e.clientX,y:e.clientY};});
+  canvas.addEventListener('touchstart',e=>{dragging=true;autoRotate=false;clearTimeout(autoTimer);prev={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+  canvas.addEventListener('touchend',()=>{dragging=false;resumeAuto();});
+  canvas.addEventListener('touchmove',e=>{if(!dragging)return;group.rotation.y+=(e.touches[0].clientX-prev.x)*0.007;group.rotation.x+=(e.touches[0].clientY-prev.y)*0.007;prev={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+  function animate(){threeAnimId=requestAnimationFrame(animate);if(autoRotate)group.rotation.y+=0.005;threeRenderer.render(scene,camera);}
+  animate();
+}
+
+// ── PDF Export ────────────────────────────────────────────────────────────────
+async function exportPDF() {
+  if (!lastResult) return;
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210; const now=new Date();
+  const s=lastResult.suggestions;
+
+  doc.setFillColor(6,10,16); doc.rect(0,0,W,28,'F');
+  doc.setTextColor(0,200,200); doc.setFont('courier','bold'); doc.setFontSize(18);
+  doc.text('NEUROSCAN',14,12);
+  doc.setFontSize(9); doc.setFont('courier','normal');
+  doc.text('Brain Tumour Segmentation & Clinical Pathway Report',14,19);
+  doc.setTextColor(74,96,128);
+  doc.text('BraTS2020 · U-Net · Rule-based CDS',14,25);
+  doc.text(now.toLocaleString(),W-14,19,{align:'right'});
+
+  doc.setFillColor(17,28,42); doc.rect(0,28,W,14,'F');
+  doc.setTextColor(200,221,240); doc.setFontSize(8);
+  const sliceTxt=lastResult.slice_used!=null?`Slice: ${lastResult.slice_used} / ${lastResult.total_slices-1}`:'Input: image upload';
+  doc.text(sliceTxt,14,37);
+  if (lastResult.voxel_info){const vi=lastResult.voxel_info;doc.text(`Voxel: ${vi.mm_x}×${vi.mm_y}×${vi.mm_z} mm`,80,37);}
+  doc.text(lastResult.demo_mode?'DEMO mode':'Model inference',W-14,37,{align:'right'});
+
+  const imgY=48,imgW=56,imgH=56,gap=9;
+  const totalW=3*imgW+2*gap; const startX=(W-totalW)/2;
+  const labels=['Original (T1ce)','Segmentation Mask','Overlay'];
+  const srcs=[lastResult.original,lastResult.segmentation,lastResult.overlay];
+  for (let i=0;i<3;i++) {
+    const x=startX+i*(imgW+gap);
+    doc.setDrawColor(0,200,200); doc.setLineWidth(0.3); doc.rect(x,imgY,imgW,imgH+8);
+    doc.setFillColor(17,28,42); doc.rect(x,imgY,imgW,6,'F');
+    doc.setTextColor(0,200,200); doc.setFontSize(6); doc.text(labels[i],x+imgW/2,imgY+4,{align:'center'});
+    doc.addImage('data:image/png;base64,'+srcs[i],'PNG',x,imgY+6,imgW,imgH);
+  }
+
+  const sumY=imgY+imgH+16;
+  doc.setFillColor(17,28,42); doc.rect(14,sumY,W-28,26,'F');
+  doc.setDrawColor(0,200,200); doc.setLineWidth(0.3); doc.rect(14,sumY,W-28,26);
+  doc.setTextColor(74,96,128); doc.setFontSize(7); doc.setFont('courier','normal');
+  doc.text('TOTAL TUMOUR COVERAGE',20,sumY+7);
+  doc.setTextColor(0,200,200); doc.setFontSize(16); doc.setFont('courier','bold');
+  doc.text(`${lastResult.tumour_percentage.toFixed(1)}%`,20,sumY+18);
+  doc.setFontSize(10);
+  doc.text(`${lastResult.total_vol_cm3.toFixed(3)} cm³`,55,sumY+18);
+  if (s){
+    doc.setTextColor(200,200,200); doc.setFontSize(8);
+    doc.text(s.grade_label,110,sumY+13);
+  }
+
+  const tableY=sumY+34;
+  doc.setTextColor(0,200,200); doc.setFontSize(8); doc.setFont('courier','bold');
+  doc.text('SEGMENTATION CLASS BREAKDOWN',14,tableY);
+  const cols=['Class','Coverage (%)','Volume (cm³)','Confidence (%)'];
+  const colX=[14,70,110,158];
+  const rowH=9;
+  doc.setFillColor(13,21,32); doc.rect(14,tableY+3,W-28,rowH,'F');
+  doc.setTextColor(0,200,200); doc.setFontSize(7); doc.setFont('courier','bold');
+  cols.forEach((c,i)=>doc.text(c,colX[i]+2,tableY+9));
+  const classColors={0:[26,26,46],1:[230,57,70],2:[244,162,97],3:[6,214,160]};
+  Object.entries(lastResult.class_stats).forEach(([idx,st],row)=>{
+    const ry=tableY+3+(row+1)*rowH;
+    doc.setFillColor(...(row%2===0?[17,28,42]:[13,21,32])); doc.rect(14,ry,W-28,rowH,'F');
+    doc.setFillColor(...classColors[idx]); doc.circle(colX[0]+3,ry+rowH/2,2,'F');
+    doc.setTextColor(200,221,240); doc.setFont('courier','normal'); doc.setFontSize(7);
+    doc.text(st.name,colX[0]+8,ry+rowH/2+1.5);
+    doc.text(st.percentage.toFixed(2)+'%',colX[1]+2,ry+rowH/2+1.5);
+    doc.text(st.vol_cm3.toFixed(3),colX[2]+2,ry+rowH/2+1.5);
+    doc.text(st.confidence.toFixed(1)+'%',colX[3]+2,ry+rowH/2+1.5);
+  });
+
+  // Clinical pathway in PDF
+  if (s && s.pathway && s.pathway.length>0) {
+    let cy2=tableY+3+(Object.keys(lastResult.class_stats).length+1)*rowH+14;
+    doc.setTextColor(0,200,200); doc.setFontSize(8); doc.setFont('courier','bold');
+    doc.text('TYPICAL CLINICAL PATHWAY (IMAGING-BASED)',14,cy2);
+    cy2+=8;
+    s.pathway.forEach(p=>{
+      if (cy2>260){doc.addPage();cy2=20;}
+      doc.setFillColor(17,28,42); doc.rect(14,cy2,W-28,22,'F');
+      doc.setTextColor(0,200,200); doc.setFontSize(7); doc.setFont('courier','bold');
+      doc.text(`STEP ${p.step}: ${p.action}`,17,cy2+7);
+      doc.setTextColor(180,200,220); doc.setFont('courier','normal'); doc.setFontSize(6.5);
+      const lines=doc.splitTextToSize(p.rationale,W-36);
+      doc.text(lines,17,cy2+13);
+      doc.setTextColor(0,150,150); doc.setFontSize(6);
+      doc.text('Source: '+p.source,17,cy2+20);
+      cy2+=26;
+    });
+
+    // Molecular tests
+    if (cy2>240){doc.addPage();cy2=20;}
+    cy2+=4;
+    doc.setTextColor(0,200,200); doc.setFontSize(8); doc.setFont('courier','bold');
+    doc.text('RECOMMENDED MOLECULAR TESTS',14,cy2); cy2+=8;
+    s.molecular.forEach(m=>{
+      if (cy2>260){doc.addPage();cy2=20;}
+      doc.setFillColor(13,21,32); doc.rect(14,cy2,W-28,18,'F');
+      doc.setTextColor(0,200,200); doc.setFontSize(7); doc.setFont('courier','bold');
+      doc.text(m.test,17,cy2+6);
+      doc.setTextColor(160,180,200); doc.setFont('courier','normal'); doc.setFontSize(6.5);
+      const wlines=doc.splitTextToSize(m.why,W-36);
+      doc.text(wlines,17,cy2+12);
+      cy2+=22;
+    });
+
+    // Disclaimer
+    if (cy2>255){doc.addPage();cy2=20;}
+    cy2+=4;
+    doc.setFillColor(40,10,10); doc.rect(14,cy2,W-28,20,'F');
+    doc.setDrawColor(230,57,70); doc.setLineWidth(0.3); doc.rect(14,cy2,W-28,20);
+    doc.setTextColor(230,57,70); doc.setFontSize(7); doc.setFont('courier','bold');
+    doc.text('⚠ RESEARCH TOOL — NOT A CLINICAL DIAGNOSIS',17,cy2+6);
+    doc.setFont('courier','normal'); doc.setFontSize(6);
+    doc.text('These suggestions implement published guidelines (WHO 2021, Stupp NEJM 2005, NCCN CNS v2.2023, ESMO 2021).',17,cy2+12);
+    doc.text('All treatment decisions must be made by a qualified neurooncologist with full clinical context.',17,cy2+17);
+  }
+
+  doc.setFillColor(6,10,16); doc.rect(0,287,W,10,'F');
+  doc.setTextColor(74,96,128); doc.setFontSize(7);
+  doc.text('NeuroScan · BraTS2020 · U-Net · Rule-based CDS · Research Use Only',W/2,293,{align:'center'});
+
+  doc.save(`neuroscan_report_${now.toISOString().slice(0,10)}_slice${lastResult.slice_used??'na'}.pdf`);
+}
+</script>
+</body>
+</html>

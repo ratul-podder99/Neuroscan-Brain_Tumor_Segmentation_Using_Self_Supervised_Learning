@@ -1,0 +1,6 @@
+*.h5
+venv
+__pycache__/
+run.bat
+run.sh
+run.txt
